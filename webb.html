@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clínica · NORMA NAYELI ALVIA PEÑAFIEL</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <!-- Lucide para iconos -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* Animaciones suaves y mejoras de diseño */
+        .transition-all { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .hover-lift:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05), 0 4px 6px -2px rgba(0,0,0,0.025); }
+        .tab-active { background: #2563eb; color: white; box-shadow: 0 2px 4px rgba(37,99,235,0.2); }
+        .card-gradient { background: #ffffff; border: 1px solid #eef2f6; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        .fade-in { animation: fadeIn 0.4s ease-out; }
+        
+        /* Scroll interno en tabla y encabezado sticky */
+        .table-container {
+            max-height: 24rem; /* 96 en Tailwind */
+            overflow-y: auto;
+            border: 1px solid #e5e7eb;
+            border-radius: 1rem;
+            scrollbar-width: thin;
+            scrollbar-color: #94a3b8 #e2e8f0;
+        }
+        .table-container thead {
+            position: sticky;
+            top: 0;
+            background: #f8fafc;
+            z-index: 10;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .table-container thead th {
+            background: #f8fafc;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+            color: #334155;
+        }
+
+        /* --- ESTILOS PARA IMPRESIÓN (REPORTE) --- */
+        @media print {
+            @page { size: A4 portrait; margin: 1cm; }
+            
+            body { 
+                background: white; 
+                -webkit-print-color-adjust: exact; 
+                print-color-adjust: exact;
+                height: auto !important;
+                overflow: visible !important;
+            }
+            
+            /* Ocultar todo excepto el contenido del reporte */
+            header, footer, .no-print, .tabs-container, #app > header, #app > footer, main {
+                display: none !important;
+            }
+
+            /* Mostrar y formatear el área de impresión */
+            .print-area {
+                display: block !important;
+                visibility: visible !important;
+                position: absolute !important;
+                top: 0 !important;
+                left: 0 !important;
+                width: 100% !important;
+                height: auto !important;
+                box-shadow: none !important;
+                border: none !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                background: white !important;
+                overflow: visible !important;
+            }
+
+            /* Asegurar que los elementos internos sean visibles */
+            .print-area * {
+                visibility: visible !important;
+            }
+            
+            /* Forzar colores de fondo en impresión */
+            .print-bg-blue { background-color: #1e3a8a !important; color: white !important; }
+            .print-bg-gray { background-color: #f3f4f6 !important; }
+            .print-border { border: 1px solid #e5e7eb !important; }
+            .print-text-red { color: #dc2626 !important; }
+        }
+        
+        /* Ocultar el área de impresión en pantalla normal (se maneja dentro del renderizado) */
+        .screen-only { display: block; }
+        .print-only { display: none; }
+        
+        @media print {
+            .screen-only { display: none !important; }
+            .print-only { display: block !important; }
+        }
+
+        /* Mejoras para las tarjetas de análisis */
+        .stat-card {
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            border: 1px solid rgba(226, 232, 240, 0.8);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            transition: all 0.3s ease;
+        }
+        .stat-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
+            border-color: rgba(147, 197, 253, 0.5);
+        }
+        .stat-icon {
+            background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+        }
+    </style>
+</head>
+<body class="bg-slate-50 font-sans antialiased h-screen overflow-hidden flex flex-col">
+
+<div id="app" class="flex-1 flex flex-col min-h-0"></div>
+
+<script>
+(function() {
+    // ----- CONFIGURACIÓN -----
+    const DIAGNOSTICOS = ["Hipertensión", "Diabetes Tipo 2", "Infarto", "Neumonía", "Sepsis", "Fractura", "Asma", "Gastritis", "Migraña", "Anemia"];
+    const CRITICOS = ["Infarto", "Sepsis"];
+    const TRATAMIENTOS = {
+        "Hipertensión": "Enalapril 10mg + Control de presión",
+        "Diabetes Tipo 2": "Metformina 500mg + Dieta",
+        "Infarto": "Aspirina + Clopidogrel + Oxígeno",
+        "Neumonía": "Antibióticos IV + Oxígeno",
+        "Sepsis": "Antibióticos de amplio espectro + Líquidos IV",
+        "Fractura": "Inmovilización + Analgésicos",
+        "Asma": "Salbutamol + Corticoides inhalados",
+        "Gastritis": "Omeprazol 20mg + Dieta blanda",
+        "Migraña": "Sumatriptán + Reposos en oscuridad",
+        "Anemia": "Sulfato ferroso + Vitamina B12"
+    };
+
+    // ----- PACIENTES INICIALES (22) -----
+    let pacientes = [
+        { id: "1", nombre: "Juan Carlos Rodríguez", edad: 72, sexo: "M", numHistoria: "HC-2024-001", fechaIngreso: "2024-01-15", diagnostico: "Infarto", tratamiento: TRATAMIENTOS["Infarto"] },
+        { id: "2", nombre: "María Elena González", edad: 45, sexo: "F", numHistoria: "HC-2024-002", fechaIngreso: "2024-01-16", diagnostico: "Hipertensión", tratamiento: TRATAMIENTOS["Hipertensión"] },
+        { id: "3", nombre: "Pedro Antonio López", edad: 68, sexo: "M", numHistoria: "HC-2024-003", fechaIngreso: "2024-01-17", diagnostico: "Diabetes Tipo 2", tratamiento: TRATAMIENTOS["Diabetes Tipo 2"] },
+        { id: "4", nombre: "Ana María Fernández", edad: 82, sexo: "F", numHistoria: "HC-2024-004", fechaIngreso: "2024-01-18", diagnostico: "Sepsis", tratamiento: TRATAMIENTOS["Sepsis"] },
+        { id: "5", nombre: "Luis Alberto Martínez", edad: 35, sexo: "M", numHistoria: "HC-2024-005", fechaIngreso: "2024-01-19", diagnostico: "Neumonía", tratamiento: TRATAMIENTOS["Neumonía"] },
+        { id: "6", nombre: "Carmen Rosa Pérez", edad: 55, sexo: "F", numHistoria: "HC-2024-006", fechaIngreso: "2024-01-20", diagnostico: "Asma", tratamiento: TRATAMIENTOS["Asma"] },
+        { id: "7", nombre: "Roberto Carlos Silva", edad: 78, sexo: "M", numHistoria: "HC-2024-007", fechaIngreso: "2024-01-21", diagnostico: "Infarto", tratamiento: TRATAMIENTOS["Infarto"] },
+        { id: "8", nombre: "Patricia Isabel Torres", edad: 42, sexo: "F", numHistoria: "HC-2024-008", fechaIngreso: "2024-01-22", diagnostico: "Gastritis", tratamiento: TRATAMIENTOS["Gastritis"] },
+        { id: "9", nombre: "Miguel Ángel Ruiz", edad: 89, sexo: "M", numHistoria: "HC-2024-009", fechaIngreso: "2024-01-23", diagnostico: "Hipertensión", tratamiento: TRATAMIENTOS["Hipertensión"] },
+        { id: "10", nombre: "Laura Beatriz Díaz", edad: 28, sexo: "F", numHistoria: "HC-2024-010", fechaIngreso: "2024-01-24", diagnostico: "Migraña", tratamiento: TRATAMIENTOS["Migraña"] },
+        { id: "11", nombre: "Fernando José Morales", edad: 63, sexo: "M", numHistoria: "HC-2024-011", fechaIngreso: "2024-01-25", diagnostico: "Fractura", tratamiento: TRATAMIENTOS["Fractura"] },
+        { id: "12", nombre: "Diana Lucía Castro", edad: 51, sexo: "F", numHistoria: "HC-2024-012", fechaIngreso: "2024-01-26", diagnostico: "Anemia", tratamiento: TRATAMIENTOS["Anemia"] },
+        { id: "13", nombre: "Ricardo Andrés Vargas", edad: 75, sexo: "M", numHistoria: "HC-2024-013", fechaIngreso: "2024-01-27", diagnostico: "Diabetes Tipo 2", tratamiento: TRATAMIENTOS["Diabetes Tipo 2"] },
+        { id: "14", nombre: "Gabriela Alejandra Soto", edad: 38, sexo: "F", numHistoria: "HC-2024-014", fechaIngreso: "2024-01-28", diagnostico: "Neumonía", tratamiento: TRATAMIENTOS["Neumonía"] },
+        { id: "15", nombre: "Hugo Sebastián Reyes", edad: 91, sexo: "M", numHistoria: "HC-2024-015", fechaIngreso: "2024-01-29", diagnostico: "Sepsis", tratamiento: TRATAMIENTOS["Sepsis"] },
+        { id: "16", nombre: "Valentina Nicole Herrera", edad: 19, sexo: "F", numHistoria: "HC-2024-016", fechaIngreso: "2024-01-30", diagnostico: "Asma", tratamiento: TRATAMIENTOS["Asma"] },
+        { id: "17", nombre: "Diego Armando Flores", edad: 66, sexo: "M", numHistoria: "HC-2024-017", fechaIngreso: "2024-02-01", diagnostico: "Hipertensión", tratamiento: TRATAMIENTOS["Hipertensión"] },
+        { id: "18", nombre: "Camila Andrea Guerrero", edad: 47, sexo: "F", numHistoria: "HC-2024-018", fechaIngreso: "2024-02-02", diagnostico: "Gastritis", tratamiento: TRATAMIENTOS["Gastritis"] },
+        { id: "19", nombre: "Alejandro Esteban Mendoza", edad: 85, sexo: "M", numHistoria: "HC-2024-019", fechaIngreso: "2024-02-03", diagnostico: "Infarto", tratamiento: TRATAMIENTOS["Infarto"] },
+        { id: "20", nombre: "Daniela Fernanda Ortiz", edad: 33, sexo: "F", numHistoria: "HC-2024-020", fechaIngreso: "2024-02-04", diagnostico: "Anemia", tratamiento: TRATAMIENTOS["Anemia"] },
+        { id: "21", nombre: "Francisco Javier Navarro", edad: 58, sexo: "M", numHistoria: "HC-2024-021", fechaIngreso: "2024-02-05", diagnostico: "Fractura", tratamiento: TRATAMIENTOS["Fractura"] },
+        { id: "22", nombre: "Paula Andrea Jiménez", edad: 71, sexo: "F", numHistoria: "HC-2024-022", fechaIngreso: "2024-02-06", diagnostico: "Migraña", tratamiento: TRATAMIENTOS["Migraña"] }
+    ].map(p => ({ ...p, alerta: p.edad > 80 ? "⚠️ Alerta" : "" }));
+
+    // ----- FUNCIONES DE CÁLCULO -----
+    const edadPromedio = () => pacientes.length ? (pacientes.reduce((s, p) => s + p.edad, 0) / pacientes.length).toFixed(1) : 0;
+    const edadMaxima = () => pacientes.length ? Math.max(...pacientes.map(p => p.edad)) : 0;
+    const edadMinima = () => pacientes.length ? Math.min(...pacientes.map(p => p.edad)) : 0;
+    const conteoPorDiagnostico = () => {
+        const conteo = {};
+        pacientes.forEach(p => conteo[p.diagnostico] = (conteo[p.diagnostico] || 0) + 1);
+        return conteo;
+    };
+    const contarCriticos = () => pacientes.filter(p => CRITICOS.includes(p.diagnostico)).length;
+    const pacientesConAlerta = () => pacientes.filter(p => p.alerta).length;
+    const promedioEdadPorDiag = (diag) => {
+        const filtrados = pacientes.filter(p => p.diagnostico === diag);
+        return filtrados.length ? (filtrados.reduce((s, p) => s + p.edad, 0) / filtrados.length).toFixed(1) : 0;
+    };
+
+    // ----- ESTADO -----
+    let currentTab = "base-datos";
+    let showModal = false;
+    let editId = null;
+    let modalError = "";
+    let formData = { nombre: "", edad: "", sexo: "M", numHistoria: "", fechaIngreso: "", diagnostico: DIAGNOSTICOS[0] };
+    let searchQuery = ""; // Para el filtro de búsqueda
+
+    // ----- RENDERIZADO -----
+    const app = document.getElementById('app');
+
+    function render() {
+        const conteoDiag = conteoPorDiagnostico();
+        const datosGrafico = DIAGNOSTICOS.map(d => ({
+            diagnostico: d,
+            cantidad: conteoDiag[d] || 0,
+            color: CRITICOS.includes(d) ? '#ef4444' : '#3b82f6'
+        }));
+
+        app.innerHTML = `
+            <!-- HEADER PROFESIONAL (sólido azul) -->
+            <header class="bg-blue-700 text-white shadow-lg shrink-0">
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+                    <div class="flex items-center justify-between flex-wrap gap-4">
+                        <div class="flex items-center gap-4">
+                            <div class="bg-white/10 p-2 rounded-xl backdrop-blur-sm border border-white/20">
+                                <i data-lucide="heart-pulse" class="w-6 h-6 text-blue-100"></i>
+                            </div>
+                            <div>
+                                <h1 class="text-2xl font-bold tracking-tight">Clínica Salud Integral</h1>
+                                <p class="text-blue-200 text-xs mt-0.5">NORMA NAYELI ALVIA PEÑAFIEL · Gestión de Pacientes</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-4 bg-white/10 px-4 py-1.5 rounded-xl border border-white/20 text-sm">
+                            <div class="flex items-center gap-2">
+                                <i data-lucide="users" class="w-4 h-4 text-blue-200"></i>
+                                <span class="font-semibold">${pacientes.length}</span>
+                                <span class="text-blue-200">pacientes</span>
+                            </div>
+                            <div class="w-px h-4 bg-white/30"></div>
+                            <div class="flex items-center gap-2">
+                                <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-200"></i>
+                                <span class="font-semibold">${contarCriticos()}</span>
+                                <span class="text-blue-200">críticos</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- TABS MEJORADAS -->
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-4 relative z-10 shrink-0 tabs-container">
+                <div class="bg-white/80 backdrop-blur-md rounded-xl shadow-sm border border-gray-200/80 p-1 inline-flex flex-wrap">
+                    ${['base-datos', 'analisis', 'graficos', 'reporte'].map(tab => `
+                        <button class="tab-btn px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-2 text-sm ${currentTab === tab ? 'tab-active' : 'text-gray-600 hover:bg-gray-100'}" data-tab="${tab}">
+                            <i data-lucide="${tab === 'base-datos' ? 'database' : tab === 'analisis' ? 'bar-chart-3' : tab === 'graficos' ? 'pie-chart' : 'file-text'}" class="w-4 h-4"></i>
+                            <span class="capitalize">${tab.replace('-', ' ')}</span>
+                        </button>
+                    `).join('')}
+                </div>
+            </div>
+
+            <!-- CONTENIDO PRINCIPAL -->
+            <main class="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 w-full min-h-0 overflow-hidden flex flex-col">
+                <div class="bg-white/90 backdrop-blur-sm rounded-2xl shadow-sm border border-gray-200/80 flex flex-col h-full overflow-hidden">
+                    <div class="flex-1 overflow-hidden p-4 fade-in relative">
+                        ${renderTabContent(currentTab, conteoDiag, datosGrafico)}
+                    </div>
+                </div>
+            </main>
+
+            <!-- FOOTER -->
+            <footer class="bg-white border-t border-gray-200 shrink-0">
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 text-center text-xs text-gray-500">
+                    <p>© ${new Date().getFullYear()} NORMA NAYELI ALVIA PEÑAFIEL · Proyecto de Base de Datos Clínica</p>
+                </div>
+            </footer>
+
+            <!-- MODAL -->
+            ${showModal ? renderModal() : ''}
+            
+            <!-- ÁREA DE IMPRESIÓN OCULTA (Se activa con @media print) -->
+            ${renderPrintArea(conteoDiag)}
+        `;
+
+        // Inicializar iconos Lucide
+        lucide.createIcons();
+
+        // Asignar eventos a tabs
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                currentTab = btn.dataset.tab;
+                render();
+            });
+        });
+
+        // Eventos del modal
+        if (showModal) {
+            document.getElementById('modal-form').addEventListener('submit', handleModalSubmit);
+            document.getElementById('modal-cancel').addEventListener('click', () => {
+                showModal = false;
+                render();
+            });
+            const diagSelect = document.getElementById('modal-diagnostico');
+            if (diagSelect) {
+                diagSelect.addEventListener('change', (e) => {
+                    document.getElementById('modal-tratamiento').value = TRATAMIENTOS[e.target.value] || '';
+                });
+            }
+        }
+
+        // Eventos de búsqueda
+        const searchInput = document.getElementById('search-input');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                searchQuery = e.target.value;
+                render();
+            });
+        }
+
+        // Eventos de botones de acción (editar/eliminar/nuevo)
+        document.querySelectorAll('.edit-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const id = btn.dataset.id;
+                const paciente = pacientes.find(p => p.id === id);
+                if (paciente) {
+                    editId = id;
+                    formData = { ...paciente };
+                    showModal = true;
+                    render();
+                }
+            });
+        });
+
+        document.querySelectorAll('.delete-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const id = btn.dataset.id;
+                if (confirm('¿Eliminar paciente?')) {
+                    pacientes = pacientes.filter(p => p.id !== id);
+                    render();
+                }
+            });
+        });
+
+        const nuevoBtn = document.getElementById('nuevo-paciente');
+        if (nuevoBtn) {
+            nuevoBtn.addEventListener('click', () => {
+                editId = null;
+                formData = { nombre: "", edad: "", sexo: "M", numHistoria: "", fechaIngreso: "", diagnostico: DIAGNOSTICOS[0] };
+                showModal = true;
+                render();
+            });
+        }
+
+        // Botones de reporte
+        document.getElementById('refresh-report')?.addEventListener('click', () => {
+            render();
+        });
+        document.getElementById('print-report')?.addEventListener('click', () => window.print());
+        document.getElementById('export-report')?.addEventListener('click', exportarReporte);
+
+        // Inicializar gráfico si estamos en pestaña gráficos
+        if (currentTab === 'graficos') {
+            setTimeout(() => {
+                const ctx = document.getElementById('chart-barras')?.getContext('2d');
+                if (ctx) {
+                    if (window.chartInstance) window.chartInstance.destroy();
+                    window.chartInstance = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: datosGrafico.map(d => d.diagnostico),
+                            datasets: [{
+                                label: 'Pacientes',
+                                data: datosGrafico.map(d => d.cantidad),
+                                backgroundColor: datosGrafico.map(d => d.color),
+                                borderRadius: 6,
+                                barPercentage: 0.65,
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { display: false },
+                                tooltip: {
+                                    backgroundColor: '#1e293b',
+                                    titleColor: '#f8fafc',
+                                    bodyColor: '#cbd5e1',
+                                    callbacks: {
+                                        afterLabel: (ctx) => CRITICOS.includes(ctx.label) ? '⚠️ Crítico' : ''
+                                    }
+                                }
+                            },
+                            scales: {
+                                y: { beginAtZero: true, grid: { color: '#e2e8f0' } },
+                                x: { grid: { display: false } }
+                            }
+                        }
+                    });
+                }
+            }, 50);
+        }
+
+        // Inicializar gráfico de preview en reporte si estamos en esa pestaña
+        if (currentTab === 'reporte') {
+            setTimeout(() => {
+                const ctxPreview = document.getElementById('chart-preview')?.getContext('2d');
+                if (ctxPreview) {
+                    if (window.chartPreviewInstance) window.chartPreviewInstance.destroy();
+                    window.chartPreviewInstance = new Chart(ctxPreview, {
+                        type: 'doughnut',
+                        data: {
+                            labels: datosGrafico.filter(d => d.cantidad > 0).map(d => d.diagnostico),
+                            datasets: [{
+                                data: datosGrafico.filter(d => d.cantidad > 0).map(d => d.cantidad),
+                                backgroundColor: datosGrafico.filter(d => d.cantidad > 0).map(d => d.color),
+                                borderWidth: 2,
+                                borderColor: '#ffffff'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { 
+                                    position: 'right',
+                                    labels: { boxWidth: 12, font: { size: 10 } }
+                                }
+                            }
+                        }
+                    });
+                }
+            }, 50);
+        }
+    }
+
+    function renderTabContent(tab, conteoDiag, datosGrafico) {
+        switch(tab) {
+            case 'base-datos': return renderBaseDatos();
+            case 'analisis': return renderAnalisis(conteoDiag);
+            case 'graficos': return renderGraficos(datosGrafico);
+            case 'reporte': return renderReporte(conteoDiag, datosGrafico);
+            default: return '';
+        }
+    }
+
+    function renderBaseDatos() {
+        // Filtrar pacientes según búsqueda
+        const filtered = pacientes.filter(p => 
+            p.nombre.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            p.numHistoria.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            p.diagnostico.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+
+        return `
+            <div class="flex flex-col h-full gap-3">
+                <div class="flex justify-between items-center shrink-0">
+                    <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                        <i data-lucide="database" class="w-5 h-5 text-blue-600"></i>
+                        Base de Datos Clínica
+                    </h2>
+                    <button id="nuevo-paciente" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg flex items-center gap-2 transition-all hover-lift text-xs">
+                        <i data-lucide="plus" class="w-3 h-3"></i>
+                        Nuevo Paciente
+                    </button>
+                </div>
+
+                <!-- Filtro de búsqueda -->
+                <div class="relative shrink-0">
+                    <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4"></i>
+                    <input type="text" id="search-input" value="${searchQuery}" placeholder="Buscar..." 
+                        class="w-full pl-9 pr-4 py-1.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-400 transition-all text-sm">
+                </div>
+
+                <!-- Leyendas -->
+                <div class="flex gap-4 text-xs bg-slate-50 p-2 rounded-lg shrink-0">
+                    <div class="flex items-center gap-2"><div class="w-3 h-3 bg-amber-100 border border-amber-300 rounded"></div> Edad > 65</div>
+                    <div class="flex items-center gap-2"><div class="w-3 h-3 bg-red-100 border border-red-300 rounded"></div> Crítico</div>
+                </div>
+
+                <!-- Tabla con scroll interno -->
+                <div class="table-container flex-1 min-h-0">
+                    <table class="w-full text-xs">
+                        <thead>
+                            <tr>
+                                <th class="px-3 py-2 text-left">Historia</th>
+                                <th class="px-3 py-2 text-left">Nombre</th>
+                                <th class="px-3 py-2 text-center">Edad</th>
+                                <th class="px-3 py-2 text-center">Sexo</th>
+                                <th class="px-3 py-2 text-left">Ingreso</th>
+                                <th class="px-3 py-2 text-left">Diagnóstico</th>
+                                <th class="px-3 py-2 text-center">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${filtered.map(p => {
+                                const claseFila = [];
+                                if (p.edad > 65) claseFila.push('bg-amber-50/30');
+                                if (CRITICOS.includes(p.diagnostico)) claseFila.push('border-l-4 border-red-500');
+                                return `
+                                    <tr class="border-t border-gray-100 hover:bg-slate-50/80 transition-colors ${claseFila.join(' ')}">
+                                        <td class="px-3 py-2 font-mono text-[10px] text-gray-500">${p.numHistoria}</td>
+                                        <td class="px-3 py-2 font-medium truncate max-w-[150px]" title="${p.nombre}">${p.nombre}</td>
+                                        <td class="px-3 py-2 text-center">
+                                            <span class="inline-flex items-center justify-center w-6 h-6 rounded-full text-xs ${p.edad > 65 ? 'bg-amber-100 text-amber-800 font-bold' : 'bg-slate-100'}">${p.edad}</span>
+                                        </td>
+                                        <td class="px-3 py-2 text-center text-gray-500">${p.sexo}</td>
+                                        <td class="px-3 py-2 text-gray-500 text-[10px]">${p.fechaIngreso}</td>
+                                        <td class="px-3 py-2">
+                                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] ${CRITICOS.includes(p.diagnostico) ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}">
+                                                ${CRITICOS.includes(p.diagnostico) ? '<i data-lucide="alert-triangle" class="w-3 h-3"></i>' : ''}
+                                                ${p.diagnostico}
+                                            </span>
+                                        </td>
+                                        <td class="px-3 py-2 text-center">
+                                            <div class="flex justify-center gap-2">
+                                                <button class="edit-btn p-1 hover:bg-blue-100 rounded" data-id="${p.id}"><i data-lucide="pen" class="w-3 h-3 text-blue-600"></i></button>
+                                                <button class="delete-btn p-1 hover:bg-red-100 rounded" data-id="${p.id}"><i data-lucide="trash-2" class="w-3 h-3 text-red-600"></i></button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                ${filtered.length === 0 ? '<p class="text-center text-gray-500 py-4 text-xs">No se encontraron pacientes</p>' : ''}
+            </div>
+        `;
+    }
+
+    function renderAnalisis(conteoDiag) {
+        const diagnosticosList = Object.keys(conteoDiag);
+        const selectedDiag = diagnosticosList[0] || DIAGNOSTICOS[0];
+        
+        return `
+            <div class="flex flex-col h-full gap-4 overflow-hidden">
+                <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2 shrink-0">
+                    <i data-lucide="bar-chart-3" class="w-5 h-5 text-blue-600"></i>
+                    Análisis Estadístico
+                </h2>
+
+                <!-- Tarjetas KPI Mejoradas -->
+                <div class="grid grid-cols-4 gap-3 shrink-0">
+                    <div class="stat-card rounded-xl p-4 relative overflow-hidden group">
+                        <div class="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+                            <i data-lucide="users" class="w-12 h-12 text-blue-600"></i>
+                        </div>
+                        <div class="stat-icon w-10 h-10 rounded-lg flex items-center justify-center mb-2">
+                            <i data-lucide="users" class="w-5 h-5 text-blue-600"></i>
+                        </div>
+                        <div class="text-2xl font-bold text-slate-800">${pacientes.length}</div>
+                        <div class="text-xs text-gray-500 font-medium">Total Pacientes</div>
+                        <div class="text-[10px] text-gray-400 mt-1">=CONTAR</div>
+                    </div>
+
+                    <div class="stat-card rounded-xl p-4 relative overflow-hidden group">
+                        <div class="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+                            <i data-lucide="activity" class="w-12 h-12 text-emerald-600"></i>
+                        </div>
+                        <div class="stat-icon w-10 h-10 rounded-lg flex items-center justify-center mb-2 bg-emerald-50">
+                            <i data-lucide="activity" class="w-5 h-5 text-emerald-600"></i>
+                        </div>
+                        <div class="text-2xl font-bold text-slate-800">${edadPromedio()}</div>
+                        <div class="text-xs text-gray-500 font-medium">Edad Promedio</div>
+                        <div class="text-[10px] text-gray-400 mt-1">=PROMEDIO</div>
+                    </div>
+
+                    <div class="stat-card rounded-xl p-4 relative overflow-hidden group">
+                        <div class="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+                            <i data-lucide="trending-up" class="w-12 h-12 text-violet-600"></i>
+                        </div>
+                        <div class="stat-icon w-10 h-10 rounded-lg flex items-center justify-center mb-2 bg-violet-50">
+                            <i data-lucide="trending-up" class="w-5 h-5 text-violet-600"></i>
+                        </div>
+                        <div class="text-2xl font-bold text-slate-800">${edadMaxima()}</div>
+                        <div class="text-xs text-gray-500 font-medium">Edad Máxima</div>
+                        <div class="text-[10px] text-gray-400 mt-1">=MAX</div>
+                    </div>
+
+                    <div class="stat-card rounded-xl p-4 relative overflow-hidden group">
+                        <div class="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+                            <i data-lucide="trending-down" class="w-12 h-12 text-amber-600"></i>
+                        </div>
+                        <div class="stat-icon w-10 h-10 rounded-lg flex items-center justify-center mb-2 bg-amber-50">
+                            <i data-lucide="trending-down" class="w-5 h-5 text-amber-600"></i>
+                        </div>
+                        <div class="text-2xl font-bold text-slate-800">${edadMinima()}</div>
+                        <div class="text-xs text-gray-500 font-medium">Edad Mínima</div>
+                        <div class="text-[10px] text-gray-400 mt-1">=MIN</div>
+                    </div>
+                </div>
+
+                <!-- Funciones avanzadas compactas -->
+                <div class="grid grid-cols-3 gap-3 shrink-0">
+                    <div class="bg-white border border-indigo-100 rounded-xl p-3 shadow-sm">
+                        <h3 class="font-semibold text-indigo-700 mb-2 flex items-center gap-2 text-xs">
+                            <i data-lucide="filter" class="w-3 h-3"></i> PROMEDIO.SI
+                        </h3>
+                        <select id="promedio-select" class="w-full border rounded p-1 mb-2 bg-slate-50 text-xs">
+                            ${diagnosticosList.map(d => `<option value="${d}">${d}</option>`).join('')}
+                        </select>
+                        <div class="text-lg font-bold text-indigo-900" id="promedio-valor">${promedioEdadPorDiag(selectedDiag)} años</div>
+                        <p class="text-[10px] text-indigo-500" id="promedio-conteo">${conteoDiag[selectedDiag] || 0} pacientes</p>
+                    </div>
+                    <div class="bg-white border border-red-100 rounded-xl p-3 shadow-sm bg-red-50/20">
+                        <h3 class="font-semibold text-red-700 mb-2 flex items-center gap-2 text-xs">
+                            <i data-lucide="alert-triangle" class="w-3 h-3"></i> CONTAR.SI
+                        </h3>
+                        <div class="text-lg font-bold text-red-900">${contarCriticos()} pacientes</div>
+                        <p class="text-[10px] text-red-600 mt-1">Infarto o Sepsis</p>
+                    </div>
+                    <div class="bg-white border border-amber-100 rounded-xl p-3 shadow-sm bg-amber-50/20">
+                        <h3 class="font-semibold text-amber-700 mb-2 flex items-center gap-2 text-xs">
+                            <i data-lucide="alert-triangle" class="w-3 h-3"></i> Función SI
+                        </h3>
+                        <div class="text-lg font-bold text-amber-900">${pacientesConAlerta()} pacientes</div>
+                        <p class="text-[10px] text-amber-600 mt-1">Edad > 80 años</p>
+                    </div>
+                </div>
+
+                <!-- Tabla de diagnósticos compacta -->
+                <div class="flex-1 min-h-0 flex flex-col">
+                    <h3 class="text-xs font-semibold text-slate-800 mb-2 shrink-0">Pacientes por Diagnóstico</h3>
+                    <div class="grid grid-cols-5 gap-2 overflow-y-auto">
+                        ${Object.entries(conteoDiag).map(([diag, cant]) => `
+                            <div class="bg-slate-50 rounded-lg p-2 text-center border border-gray-200 hover:shadow-md transition-shadow">
+                                <div class="text-lg font-bold text-slate-800">${cant}</div>
+                                <div class="text-[10px] text-slate-600 truncate" title="${diag}">${diag}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function renderGraficos(datosGrafico) {
+        return `
+            <div class="flex flex-col h-full gap-4">
+                <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2 shrink-0">
+                    <i data-lucide="pie-chart" class="w-5 h-5 text-blue-600"></i>
+                    Visualización de Datos
+                </h2>
+
+                <!-- Gráfico compacto -->
+                <div class="bg-white p-2 rounded-xl border border-gray-200 shadow-sm flex-1 min-h-0 relative">
+                    <canvas id="chart-barras"></canvas>
+                </div>
+
+                <!-- Tabla resumen con scroll interno -->
+                <div class="h-32 overflow-y-auto rounded-xl border border-gray-200 shrink-0">
+                    <table class="w-full text-xs">
+                        <thead class="bg-slate-100 sticky top-0">
+                            <tr>
+                                <th class="px-3 py-2 text-left">Diagnóstico</th>
+                                <th class="px-3 py-2 text-center">Cantidad</th>
+                                <th class="px-3 py-2 text-center">%</th>
+                                <th class="px-3 py-2 text-center">Tipo</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${datosGrafico.map(item => {
+                                const total = pacientes.length;
+                                const porcentaje = total ? ((item.cantidad / total) * 100).toFixed(1) : '0';
+                                const esCritico = item.color === '#ef4444';
+                                return `
+                                    <tr class="border-t border-gray-200 hover:bg-slate-50">
+                                        <td class="px-3 py-1.5">${item.diagnostico}</td>
+                                        <td class="px-3 py-1.5 text-center font-semibold">${item.cantidad}</td>
+                                        <td class="px-3 py-1.5 text-center">${porcentaje}%</td>
+                                        <td class="px-3 py-1.5 text-center">
+                                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] ${esCritico ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}">
+                                                ${esCritico ? 'Crítico' : 'Normal'}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    }
+
+    function renderReporte(conteoDiag, datosGrafico) {
+        const total = pacientes.length;
+        const pacientesCriticos = pacientes.filter(p => CRITICOS.includes(p.diagnostico));
+        const diagOrdenado = Object.entries(conteoDiag).sort((a,b) => b[1] - a[1]);
+        const diagPrincipal = diagOrdenado[0];
+        
+        return `
+            <div class="flex flex-col h-full gap-4 screen-only overflow-hidden">
+                <div class="flex justify-between items-center shrink-0">
+                    <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                        <i data-lucide="file-text" class="w-5 h-5 text-blue-600"></i>
+                        Reporte Clínico
+                    </h2>
+                    <div class="flex gap-2">
+                        <button id="refresh-report" class="border border-gray-200 hover:bg-gray-50 px-3 py-1.5 rounded-lg flex items-center gap-2 transition text-xs">
+                            <i data-lucide="refresh-cw" class="w-3 h-3"></i> Actualizar
+                        </button>
+                        <button id="print-report" class="border border-gray-200 hover:bg-gray-50 px-3 py-1.5 rounded-lg flex items-center gap-2 transition text-xs">
+                            <i data-lucide="printer" class="w-3 h-3"></i> Imprimir
+                        </button>
+                        <button id="export-report" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg flex items-center gap-2 transition text-xs">
+                            <i data-lucide="download" class="w-3 h-3"></i> Exportar
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Vista previa mejorada del reporte -->
+                <div class="flex-1 bg-slate-50 rounded-xl border border-gray-200 p-4 overflow-y-auto">
+                    <div class="text-center mb-4 pb-3 border-b border-gray-200">
+                        <h3 class="text-xl font-bold text-slate-800">Vista Previa del Reporte</h3>
+                        <p class="text-xs text-slate-500">Este es el diseño que se imprimirá en papel</p>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <!-- Gráfico circular de preview -->
+                        <div class="bg-white p-3 rounded-lg border shadow-sm">
+                            <h4 class="text-xs font-bold text-gray-700 mb-2 text-center">Distribución de Diagnósticos</h4>
+                            <div class="h-40 relative">
+                                <canvas id="chart-preview"></canvas>
+                            </div>
+                        </div>
+                        
+                        <!-- Estadísticas rápidas -->
+                        <div class="space-y-2">
+                            <div class="bg-white p-3 rounded-lg border shadow-sm flex items-center justify-between">
+                                <div>
+                                    <div class="text-xs text-gray-500">Total Pacientes</div>
+                                    <div class="text-xl font-bold text-slate-800">${total}</div>
+                                </div>
+                                <div class="bg-blue-100 p-2 rounded-full">
+                                    <i data-lucide="users" class="w-5 h-5 text-blue-600"></i>
+                                </div>
+                            </div>
+                            
+                            <div class="bg-white p-3 rounded-lg border shadow-sm flex items-center justify-between">
+                                <div>
+                                    <div class="text-xs text-gray-500">Pacientes Críticos</div>
+                                    <div class="text-xl font-bold text-red-600">${pacientesCriticos.length}</div>
+                                </div>
+                                <div class="bg-red-100 p-2 rounded-full">
+                                    <i data-lucide="alert-triangle" class="w-5 h-5 text-red-600"></i>
+                                </div>
+                            </div>
+                            
+                            <div class="bg-white p-3 rounded-lg border shadow-sm flex items-center justify-between">
+                                <div>
+                                    <div class="text-xs text-gray-500">Mayores de 80 años</div>
+                                    <div class="text-xl font-bold text-amber-600">${pacientesConAlerta()}</div>
+                                </div>
+                                <div class="bg-amber-100 p-2 rounded-full">
+                                    <i data-lucide="alert-circle" class="w-5 h-5 text-amber-600"></i>
+                                </div>
+                            </div>
+                            
+                            <div class="bg-white p-3 rounded-lg border shadow-sm">
+                                <div class="text-xs text-gray-500 mb-1">Diagnóstico Principal</div>
+                                <div class="text-sm font-bold text-slate-800">${diagPrincipal ? diagPrincipal[0] : 'N/A'}</div>
+                                <div class="text-xs text-gray-400">${diagPrincipal ? diagPrincipal[1] : 0} casos</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tabla de críticos en preview -->
+                    <div class="bg-white rounded-lg border shadow-sm overflow-hidden">
+                        <div class="bg-red-50 px-3 py-2 border-b border-red-100">
+                            <h4 class="text-xs font-bold text-red-700 flex items-center gap-2">
+                                <i data-lucide="alert-triangle" class="w-3 h-3"></i>
+                                Pacientes Críticos (${pacientesCriticos.length})
+                            </h4>
+                        </div>
+                        <div class="max-h-32 overflow-y-auto">
+                            <table class="w-full text-xs">
+                                <thead class="bg-gray-50 sticky top-0">
+                                    <tr>
+                                        <th class="px-2 py-1 text-left">Historia</th>
+                                        <th class="px-2 py-1 text-left">Nombre</th>
+                                        <th class="px-2 py-1 text-center">Edad</th>
+                                        <th class="px-2 py-1 text-left">Diagnóstico</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${pacientesCriticos.map(p => `
+                                        <tr class="border-t border-gray-100">
+                                            <td class="px-2 py-1 font-mono text-[10px]">${p.numHistoria}</td>
+                                            <td class="px-2 py-1 truncate max-w-[150px]">${p.nombre}</td>
+                                            <td class="px-2 py-1 text-center">${p.edad}</td>
+                                            <td class="px-2 py-1"><span class="text-red-600 font-medium">${p.diagnostico}</span></td>
+                                        </tr>
+                                    `).join('')}
+                                    ${pacientesCriticos.length === 0 ? '<tr><td colspan="4" class="px-2 py-2 text-center text-gray-400">No hay pacientes críticos</td></tr>' : ''}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4 bg-blue-50 p-3 rounded-lg border border-blue-200">
+                        <p class="text-xs text-blue-800 leading-relaxed">
+                            <strong>Resumen:</strong> El diagnóstico más frecuente es <strong>${diagPrincipal ? diagPrincipal[0] : 'N/A'}</strong>. 
+                            Hay ${contarCriticos()} pacientes críticos y ${pacientesConAlerta()} mayores de 80 años. 
+                            Edad promedio: ${edadPromedio()} años.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Función para generar el HTML que se imprimirá (Diseño limpio de una página)
+    function renderPrintArea(conteoDiag) {
+        const total = pacientes.length;
+        const fecha = new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        const pacientesCriticos = pacientes.filter(p => CRITICOS.includes(p.diagnostico));
+        
+        // Ordenar diagnósticos por cantidad
+        const diagOrdenado = Object.entries(conteoDiag).sort((a,b) => b[1] - a[1]);
+        const diagPrincipal = diagOrdenado[0];
+
+        return `
+            <div class="print-area hidden">
+                <!-- Encabezado del Reporte -->
+                <div class="text-center border-b-2 border-blue-900 pb-4 mb-4">
+                    <div class="flex justify-center items-center gap-3 mb-2">
+                        <div class="bg-blue-900 text-white p-2 rounded-full">
+                            <i data-lucide="heart-pulse" class="w-8 h-8"></i>
+                        </div>
+                        <div class="text-left">
+                            <h1 class="text-2xl font-bold text-blue-900 uppercase tracking-wider">Reporte Clínico</h1>
+                            <p class="text-sm text-gray-600">Clínica Salud Integral</p>
+                        </div>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-2 uppercase">Generado el ${fecha}</p>
+                    <p class="text-xs text-gray-400">Dr. NORMA NAYELI ALVIA PEÑAFIEL</p>
+                </div>
+
+                <!-- Indicadores Clave (Grid 4 columnas) -->
+                <div class="grid grid-cols-4 gap-3 mb-4">
+                    <div class="bg-gray-50 p-2 rounded border border-gray-200 text-center">
+                        <div class="text-xs text-gray-500 uppercase">Total Pacientes</div>
+                        <div class="text-xl font-bold text-slate-800">${total}</div>
+                    </div>
+                    <div class="bg-gray-50 p-2 rounded border border-gray-200 text-center">
+                        <div class="text-xs text-gray-500 uppercase">Edad Promedio</div>
+                        <div class="text-xl font-bold text-slate-800">${edadPromedio()}</div>
+                    </div>
+                    <div class="bg-gray-50 p-2 rounded border border-gray-200 text-center">
+                        <div class="text-xs text-gray-500 uppercase">Edad Máxima</div>
+                        <div class="text-xl font-bold text-slate-800">${edadMaxima()}</div>
+                    </div>
+                    <div class="bg-gray-50 p-2 rounded border border-gray-200 text-center">
+                        <div class="text-xs text-gray-500 uppercase">Edad Mínima</div>
+                        <div class="text-xl font-bold text-slate-800">${edadMinima()}</div>
+                    </div>
+                </div>
+
+                <!-- Tabla de Pacientes Críticos -->
+                <div class="mb-4">
+                    <h3 class="text-sm font-bold text-red-700 uppercase mb-2 border-b border-red-200 pb-1">
+                        Pacientes en Estado Crítico (${pacientesCriticos.length})
+                    </h3>
+                    <table class="w-full text-xs border-collapse">
+                        <thead>
+                            <tr class="bg-red-50 text-red-900">
+                                <th class="border border-red-200 p-1 text-left">Historia</th>
+                                <th class="border border-red-200 p-1 text-left">Nombre</th>
+                                <th class="border border-red-200 p-1 text-center">Edad</th>
+                                <th class="border border-red-200 p-1 text-left">Diagnóstico</th>
+                                <th class="border border-red-200 p-1 text-left">Tratamiento</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${pacientesCriticos.map(p => `
+                                <tr>
+                                    <td class="border border-gray-200 p-1 font-mono">${p.numHistoria}</td>
+                                    <td class="border border-gray-200 p-1">${p.nombre}</td>
+                                    <td class="border border-gray-200 p-1 text-center">${p.edad}</td>
+                                    <td class="border border-gray-200 p-1 font-semibold text-red-700">${p.diagnostico}</td>
+                                    <td class="border border-gray-200 p-1 text-[10px]">${p.tratamiento}</td>
+                                </tr>
+                            `).join('')}
+                            ${pacientesCriticos.length === 0 ? '<tr><td colspan="5" class="border p-2 text-center text-gray-500">No hay pacientes críticos</td></tr>' : ''}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Conclusión Breve -->
+                <div class="bg-blue-50 p-3 rounded border border-blue-200 mb-4">
+                    <h4 class="font-bold text-blue-900 text-xs uppercase mb-1">Conclusión del Análisis</h4>
+                    <p class="text-xs text-blue-800 leading-relaxed text-justify">
+                        El diagnóstico más frecuente es <strong>${diagPrincipal ? diagPrincipal[0] : 'N/A'}</strong> con ${diagPrincipal ? diagPrincipal[1] : 0} casos registrados. 
+                        Se identificaron <strong>${contarCriticos()} pacientes críticos</strong> (Infarto/Sepsis) que requieren monitoreo intensivo. 
+                        Además, <strong>${pacientesConAlerta()} pacientes</strong> mayores de 80 años presentan alerta de edad avanzada. 
+                        La edad promedio de la muestra es de <strong>${edadPromedio()} años</strong>.
+                    </p>
+                </div>
+
+                <!-- Firma -->
+                <div class="mt-8 pt-4 border-t border-gray-300 flex justify-between items-end">
+                    <div class="text-[10px] text-gray-400">
+                        Documento generado automáticamente por el sistema.<br>
+                        © ${new Date().getFullYear()} Clínica Salud Integral.
+                    </div>
+                    <div class="text-center">
+                        <div class="border-t border-black w-32 mb-1"></div>
+                        <div class="text-xs font-bold">Firma Responsable</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function renderModal() {
+        const titulo = editId ? 'Editar Paciente' : 'Nuevo Paciente';
+        const btnText = editId ? 'Actualizar' : 'Guardar';
+        return `
+            <div class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                <div class="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl animate__animated animate__fadeIn">
+                    <h3 class="text-xl font-bold mb-4">${titulo}</h3>
+                    ${modalError ? `<div class="mb-4 p-3 bg-red-100 text-red-700 rounded-lg flex items-center gap-2"><i data-lucide="alert-circle" class="w-4 h-4"></i>${modalError}</div>` : ''}
+                    <form id="modal-form">
+                        <div class="space-y-4">
+                            <div>
+                                <label class="text-sm font-medium block mb-1">Nombre completo</label>
+                                <input type="text" id="modal-nombre" value="${formData.nombre || ''}" class="w-full border rounded-lg p-2 focus:ring-2 focus:ring-blue-200" required>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="text-sm font-medium block mb-1">Edad (0-120)</label>
+                                    <input type="number" id="modal-edad" value="${formData.edad || ''}" min="0" max="120" class="w-full border rounded-lg p-2" required>
+                                </div>
+                                <div>
+                                    <label class="text-sm font-medium block mb-1">Sexo</label>
+                                    <select id="modal-sexo" class="w-full border rounded-lg p-2">
+                                        <option value="M" ${formData.sexo === 'M' ? 'selected' : ''}>Masculino</option>
+                                        <option value="F" ${formData.sexo === 'F' ? 'selected' : ''}>Femenino</option>
+                                        <option value="Otro" ${formData.sexo === 'Otro' ? 'selected' : ''}>Otro</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="text-sm font-medium block mb-1">N° Historia Clínica</label>
+                                <input type="text" id="modal-historia" value="${formData.numHistoria || ''}" ${editId ? 'disabled' : ''} class="w-full border rounded-lg p-2 ${editId ? 'bg-gray-100' : ''}" required>
+                            </div>
+                            <div>
+                                <label class="text-sm font-medium block mb-1">Fecha de ingreso</label>
+                                <input type="date" id="modal-fecha" value="${formData.fechaIngreso || ''}" class="w-full border rounded-lg p-2" required>
+                            </div>
+                            <div>
+                                <label class="text-sm font-medium block mb-1">Diagnóstico</label>
+                                <select id="modal-diagnostico" class="w-full border rounded-lg p-2">
+                                    ${DIAGNOSTICOS.map(d => `<option value="${d}" ${(formData.diagnostico || DIAGNOSTICOS[0]) === d ? 'selected' : ''}>${d}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div>
+                                <label class="text-sm font-medium block mb-1">Tratamiento</label>
+                                <input type="text" id="modal-tratamiento" value="${TRATAMIENTOS[formData.diagnostico || DIAGNOSTICOS[0]] || ''}" readonly class="w-full border rounded-lg p-2 bg-gray-100">
+                            </div>
+                        </div>
+                        <div class="flex justify-end gap-3 mt-6">
+                            <button type="button" id="modal-cancel" class="px-4 py-2 border rounded-lg hover:bg-gray-100">Cancelar</button>
+                            <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">${btnText}</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
+    }
+
+    function handleModalSubmit(e) {
+        e.preventDefault();
+        const nombre = document.getElementById('modal-nombre').value.trim();
+        const edad = parseInt(document.getElementById('modal-edad').value, 10);
+        const sexo = document.getElementById('modal-sexo').value;
+        const numHistoria = document.getElementById('modal-historia').value.trim();
+        const fechaIngreso = document.getElementById('modal-fecha').value;
+        const diagnostico = document.getElementById('modal-diagnostico').value;
+
+        try {
+            if (!nombre || !edad || !numHistoria || !fechaIngreso) throw new Error("Todos los campos son obligatorios");
+            if (edad < 0 || edad > 120) throw new Error("La edad debe estar entre 0 y 120 años");
+            if (!editId && pacientes.some(p => p.numHistoria === numHistoria)) throw new Error("El número de historia ya existe");
+
+            const pacienteData = {
+                nombre, edad, sexo, numHistoria, fechaIngreso, diagnostico,
+                tratamiento: TRATAMIENTOS[diagnostico],
+                alerta: edad > 80 ? "⚠️ Alerta" : ""
+            };
+
+            if (editId) {
+                pacientes = pacientes.map(p => p.id === editId ? { ...p, ...pacienteData, id: editId } : p);
+            } else {
+                pacientes.push({ id: Date.now().toString(), ...pacienteData });
+            }
+
+            showModal = false;
+            editId = null;
+            render();
+        } catch (error) {
+            modalError = error.message;
+            render();
+        }
+    }
+
+    function exportarReporte() {
+        const reporteData = {
+            fecha: new Date().toISOString(),
+            resumen: {
+                totalPacientes: pacientes.length,
+                edadPromedio: edadPromedio(),
+                edadMaxima: edadMaxima(),
+                edadMinima: edadMinima(),
+                pacientesCriticos: contarCriticos(),
+                pacientesConAlerta: pacientesConAlerta()
+            },
+            pacientesPorDiagnostico: conteoPorDiagnostico()
+        };
+        const blob = new Blob([JSON.stringify(reporteData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `reporte-clinico-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    // Iniciar
+    render();
+
+    // Evento para el select de promedio en análisis (delegación)
+    document.addEventListener('change', (e) => {
+        if (e.target.id === 'promedio-select') {
+            const diag = e.target.value;
+            document.getElementById('promedio-valor').innerText = promedioEdadPorDiag(diag) + ' años';
+            document.getElementById('promedio-conteo').innerText = (conteoPorDiagnostico()[diag] || 0) + ' pacientes';
+        }
+    });
+})();
+</script>
+</body>
+</html>
